@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Answer diễn đạt lại context bằng từ khác nhưng không đổi ý | Answer thêm claim không có trong context (hallucination) | Chặn release, kiểm tra prompt grounding |
+| Answer Relevance | Answer thêm caveat an toàn ngoài câu hỏi nhưng vẫn đúng chủ đề | Answer lạc đề, không giải quyết câu hỏi | Kiểm tra intent detection và routing |
+| Context Recall | Câu adversarial/out-of-scope không cần gold context | Retriever bỏ sót evidence bắt buộc để trả lời đúng | Tinh chỉnh retriever hoặc query rewriting |
+| Context Precision | Có vài chunk nhiễu do top-k lớn hơn cần thiết | Chunk đúng bị xếp cuối hoặc không xuất hiện | Cải thiện ranking hoặc reranker |
+| Completeness | Thiếu chi tiết phụ không ảnh hưởng kết luận | Thiếu điều kiện/exception làm thay đổi hành động của khách | Rà lại prompt generation và context đưa vào |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -46,15 +46,15 @@ Ba bias thường gặp:
 
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
-> *Câu trả lời:*
+> Lấy cùng một cặp answer A và B cho cùng câu hỏi, cho judge chấm hai lần: lần một theo thứ tự A trước B, lần hai đảo thành B trước A. Nếu judge đổi lựa chọn theo vị trí thay vì theo nội dung, tức là chọn answer đứng trước ở cả hai lần dù nội dung không đổi, thì kết luận có position bias.
 
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
-> *Câu trả lời:*
+> Rubric cần nêu rõ điểm cao dựa trên độ chính xác và đủ ý cần thiết, không dựa trên độ dài. Nên kèm ví dụ một câu trả lời ngắn đạt điểm 5, để judge không mặc định câu dài hơn là câu tốt hơn.
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
-> *Câu trả lời:*
+> Judge có thể mang bias hệ thống hoặc bỏ sót sắc thái riêng của domain mà chỉ con người mới nhận ra. So sánh điểm judge với nhãn người giúp phát hiện độ lệch này và điều chỉnh rubric hoặc threshold trước khi tin dùng judge cho đánh giá tự động.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,13 +62,13 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness | 0.8 | Hallucination gây rủi ro thông tin sai trực tiếp cho khách hàng, không thể chấp nhận thấp hơn |
+| Answer Relevance | 0.7 | Lạc đề làm giảm trải nghiệm nhưng ít nguy hiểm hơn hallucination |
+| Completeness | 0.7 | Thiếu điều kiện có thể dẫn khách hành động sai, nhưng vẫn chấp nhận một mức sai số nhỏ |
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
-> *Câu trả lời:*
+> Offline evaluation dùng mỗi khi thay đổi prompt hoặc model trước khi release, vì so sánh được trên cùng một tập test cố định. Online evaluation dùng sau khi hệ thống đã chạy thật, để phát hiện độ trôi theo traffic thực tế mà tập offline không phủ hết. Human review dành cho case rủi ro cao như an toàn hoặc quyền riêng tư, và để hiệu chỉnh lại LLM judge định kỳ.
 
 ---
 
@@ -234,35 +234,35 @@ Thiết kế rubric domain-specific cho OrbitTech Customer Support. Mỗi mức 
 
 Chọn 3–5 dimensions:
 
-- [ ] Correctness
-- [ ] Completeness
+- [x] Correctness
+- [x] Completeness
 - [ ] Relevance
-- [ ] Evidence/citation
+- [x] Evidence/citation
 - [ ] Actionability
-- [ ] Safety/privacy
+- [x] Safety/privacy
 - [ ] Tone/clarity
 - [ ] Dimension khác: __________
 
 | Score | Tiêu chí domain-specific | Ví dụ response |
 |---:|---|---|
-| 5 | | |
-| 4 | | |
-| 3 | | |
-| 2 | | |
-| 1 | | |
+| 5 | Đúng chính sách hiện hành, đủ mọi điều kiện và exception liên quan, mọi claim truy được về context, không tiết lộ thông tin nhạy cảm hay xác nhận yêu cầu vượt quyền hạn | Câu hỏi về hoàn tiền nêu đủ thời hạn, khoản phí không hoàn và điều kiện áp dụng |
+| 4 | Đúng chính sách và có evidence hỗ trợ, nhưng bỏ sót một chi tiết phụ không làm đổi kết luận chính | Trả lời đúng hướng xử lý nhưng thiếu ngày hiệu lực chính xác của policy |
+| 3 | Đúng hướng nhưng thiếu ít nhất một điều kiện quan trọng có thể ảnh hưởng quyết định của khách, hoặc diễn đạt mơ hồ | Trả lời đúng có thể hoàn tiền nhưng không nêu rõ khoản phí xử lý không được hoàn |
+| 2 | Có claim không được context hỗ trợ, hoặc bỏ sót điều kiện cốt lõi làm đổi kết luận, nhưng chưa gây rủi ro an toàn hay riêng tư | Trả lời sai thời hạn bảo hành hoặc bỏ qua điều kiện loại trừ chính |
+| 1 | Sai chính sách, bịa thông tin ngoài corpus, hoặc vi phạm ranh giới an toàn/riêng tư | Xác nhận yêu cầu đổi mật khẩu qua chat, hoặc tiết lộ thông tin tài khoản của người khác |
 
 **Ba edge cases khó chấm**
 
 | Edge Case | Tại sao khó chấm? | Rubric xử lý thế nào? |
 |---|---|---|
-| | | |
-| | | |
-| | | |
+| Câu hỏi false-premise (adversarial) | Answer đúng phải bác bỏ premise sai, không phải trả lời trực tiếp premise đó | Điểm cao chỉ khi answer từ chối xác nhận premise sai trước khi cung cấp thông tin đúng |
+| Câu hỏi nằm ở ranh giới hai policy version | Answer có thể đúng theo version cũ nhưng sai theo version đang áp dụng cho case cụ thể | Bắt buộc answer nêu rõ version nào áp dụng và căn cứ vào đâu để chọn version đó |
+| Câu hỏi liên quan tài khoản/bảo mật | Answer có thể đúng chính sách nhưng vô tình gợi ý hành động không an toàn | Trừ điểm ngay cả khi phần còn lại chính xác, vì vi phạm an toàn được ưu tiên hơn độ đầy đủ |
 
 **Bias controls:** Rubric hoặc evaluation protocol của bạn giảm position bias,
 verbosity bias và self-preference bằng cách nào?
 
-> *Câu trả lời:*
+> Mỗi mức điểm đều kèm ví dụ cụ thể để hai người chấm không suy diễn theo cảm tính, giúp giảm ambiguity dẫn đến self-preference. Để giảm position bias, các answer so sánh được chấm độc lập từng cái, không đặt cạnh nhau, và thứ tự chấm được đảo giữa các lần lặp. Để giảm verbosity bias, rubric nêu rõ điểm 5 không yêu cầu câu trả lời dài, và độ dài vượt mức cần thiết so với câu hỏi bị coi là dấu hiệu trừ điểm.
 
 ### Exercise 3.4 — Framework Comparison (Bonus +10)
 
